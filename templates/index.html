@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人脸识别与打码系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; margin-bottom: 10px; text-align: center; }
+        .subtitle { color: #666; text-align: center; margin-bottom: 30px; }
+        .upload-area {
+            border: 3px dashed #ccc;
+            padding: 50px 20px;
+            text-align: center;
+            margin: 30px 0;
+            border-radius: 10px;
+            cursor: pointer;
+            background: #fafafa;
+            transition: all 0.3s;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #4CAF50;
+            background: #f0f9f0;
+        }
+        .upload-icon { font-size: 48px; margin-bottom: 15px; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: background 0.3s;
+        }
+        button:hover { background: #45a049; }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .image-grid {
+            display: none; /* 初始隐藏，上传成功后才显示 */
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin: 40px 0;
+        }
+        .image-card {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+            border: 1px solid #eee;
+        }
+        .image-header {
+            background: #f7f7f7;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            text-align: center;
+        }
+        .image-header h4 {
+            color: #333;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .image-container {
+            padding: 20px;
+            text-align: center;
+        }
+        .image-container img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 5px;
+            display: block;
+            margin: 0 auto;
+        }
+        .result-info {
+            background: #e8f5e9;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+            text-align: center;
+            display: none;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px;
+            color: #666;
+        }
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+        #resetBtn { background: #6c757d; }
+        #resetBtn:hover { background: #5a6268; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 人脸识别与打码系统</h1>
+            <p class="subtitle">上传图片，自动检测人脸并生成打码保护图</p>
+        </header>
+
+        <!-- 上传区域 -->
+        <div class="upload-area" id="dropArea">
+            <div class="upload-icon">📁</div>
+            <h3>点击或拖拽图片到此区域</h3>
+            <p>支持 JPG, PNG, GIF, BMP 格式，最大 16MB</p>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        </div>
+
+        <!-- 操作按钮 -->
+        <div style="text-align: center;">
+            <button id="uploadBtn" disabled>🚀 开始检测与打码</button>
+            <button id="resetBtn" disabled>🔄 重置</button>
+        </div>
+
+        <!-- 加载提示 -->
+        <div class="loading" id="loading">正在处理图片</div>
+
+        <!-- 检测结果统计 -->
+        <div class="result-info" id="resultInfo">
+            <h3>🎯 检测完成</h3>
+            <p>共识别到 <strong id="faceCount">0</strong> 张人脸</p>
+            <p><small>处理时间: <span id="processTime">0</span> 秒 | <span id="timestamp">-</span></small></p>
+        </div>
+
+        <!-- 三图对比展示区 -->
+        <div class="image-grid" id="imageGrid">
+            <!-- 原始图片 -->
+            <div class="image-card">
+                <div class="image-header"><h4><span>🖼️</span> 原始图片</h4></div>
+                <div class="image-container"><img id="originalImage" alt="原始图片"></div>
+            </div>
+            
+            <!-- 带框标记图 -->
+            <div class="image-card">
+                <div class="image-header"><h4><span>✅</span> 人脸标记图</h4></div>
+                <div class="image-container"><img id="markedImage" alt="人脸标记图"></div>
+            </div>
+            
+            <!-- 人脸打码图 -->
+            <div class="image-card">
+                <div class="image-header"><h4><span>🔒</span> 人脸打码图</h4></div>
+                <div class="image-container"><img id="blurredImage" alt="人脸打码图"></div>
+            </div>
+        </div>
+
+        <footer style="text-align: center; margin-top: 40px; color: #888; font-size: 0.9rem;">
+            <p>基于 Flask + OpenCV 构建 | 人脸检测与隐私保护工具</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM 元素
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const loading = document.getElementById('loading');
+        const resultInfo = document.getElementById('resultInfo');
+        const imageGrid = document.getElementById('imageGrid');
+        
+        // 三个结果图片元素
+        const originalImage = document.getElementById('originalImage');
+        const markedImage = document.getElementById('markedImage');
+        const blurredImage = document.getElementById('blurredImage');
+        
+        // 统计信息元素
+        const faceCountEl = document.getElementById('faceCount');
+        const processTimeEl = document.getElementById('processTime');
+        const timestampEl = document.getElementById('timestamp');
+        
+        let selectedFile = null;
+        let processStartTime = null;
+
+        // ==================== 事件监听 ====================
+        
+        // 点击上传区域触发文件选择
+        dropArea.addEventListener('click', () => fileInput.click());
+        
+        // 文件选择变化
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                selectedFile = e.target.files[0];
+                previewFile(selectedFile);
+                uploadBtn.disabled = false;
+            }
+        });
+        
+        // 拖拽上传功能
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.classList.add('dragover');
+        });
+        
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.classList.remove('dragover');
+        });
+        
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                selectedFile = e.dataTransfer.files[0];
+                previewFile(selectedFile);
+                uploadBtn.disabled = false;
+            }
+        });
+        
+        // 上传按钮点击事件
+        uploadBtn.addEventListener('click', handleUpload);
+        
+        // 重置按钮点击事件
+        resetBtn.addEventListener('click', resetAll);
+
+        // ==================== 核心函数 ====================
+        
+        // 预览图片
+        function previewFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                // 在原始图片位置预览
+                originalImage.src = e.target.result;
+                // 先隐藏其他结果，只显示原始图预览
+                imageGrid.style.display = 'grid';
+                resultInfo.style.display = 'none';
+                resetBtn.disabled = false;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // 处理上传
+        async function handleUpload() {
+            if (!selectedFile) return;
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            // 显示加载，禁用按钮
+            loading.style.display = 'block';
+            uploadBtn.disabled = true;
+            resetBtn.disabled = true;
+            processStartTime = Date.now();
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                // 计算处理时间
+                const processTime = ((Date.now() - processStartTime) / 1000).toFixed(2);
+                
+                if (data.success) {
+                    // 1. 更新结果信息
+                    faceCountEl.textContent = data.face_count;
+                    processTimeEl.textContent = processTime;
+                    timestampEl.textContent = data.timestamp || new Date().toLocaleTimeString();
+                    
+                    // 2. 显示三张结果图片（防止缓存）
+                    originalImage.src = data.original_url + '?t=' + Date.now();
+                    markedImage.src = data.marked_url + '?t=' + Date.now();
+                    blurredImage.src = data.blurred_url + '?t=' + Date.now();
+                    
+                    // 3. 显示结果区域
+                    resultInfo.style.display = 'block';
+                    imageGrid.style.display = 'grid';
+                    
+                    // 4. 显示通知
+                    if (data.face_count > 0) {
+                        alert(`✅ 成功检测到 ${data.face_count} 张人脸！\n已生成标记图和打码图。`);
+                    } else {
+                        alert('⚠️ 未检测到人脸，请尝试更换图片。');
+                    }
+                } else {
+                    alert(`❌ 处理失败: ${data.error || '未知错误'}`);
+                    // 出错时仍显示已上传的原始图片预览
+                    imageGrid.style.display = 'grid';
+                }
+            } catch (error) {
+                console.error('上传失败:', error);
+                alert('❌ 网络请求失败，请检查服务器连接。');
+            } finally {
+                // 恢复界面状态
+                loading.style.display = 'none';
+                uploadBtn.disabled = false;
+                resetBtn.disabled = false;
+            }
+        }
+        
+        // 重置所有状态
+        function resetAll() {
+            selectedFile = null;
+            fileInput.value = '';
+            
+            // 清空图片显示
+            originalImage.src = '';
+            markedImage.src = '';
+            blurredImage.src = '';
+            
+            // 隐藏结果区域
+            imageGrid.style.display = 'none';
+            resultInfo.style.display = 'none';
+            
+            // 重置按钮状态
+            uploadBtn.disabled = true;
+            resetBtn.disabled = true;
+            
+            console.log('系统已重置，可以重新上传图片。');
+        }
+
+        // 页面加载完成后的提示
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('人脸识别与打码系统前端已加载。');
+            console.log('提示：请确保后端 Flask 服务正在运行 (python app.py)');
+        });
+    </script>
+</body>
+</html>
