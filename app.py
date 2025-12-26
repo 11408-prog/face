@@ -231,13 +231,9 @@ if __name__ == '__main__':
     print("=" * 50)
     print("人脸识别网站启动中...")
     print("功能：人脸检测 + 人脸打码（高斯模糊）")
+    print(f"访问地址: http://127.0.0.1:5000")
     print(f"上传目录: {os.path.abspath(app.config['UPLOAD_FOLDER'])}")
     print("=" * 50)
-    # 使用环境变量 PORT（云平台通常通过该变量指定端口）
-    port = int(os.environ.get('PORT', 5000))
-    # 通过 FLASK_DEBUG 环境变量控制调试模式（可选）
-    debug_env = os.environ.get('FLASK_DEBUG', 'True')
-    debug = str(debug_env).lower() in ('1', 'true', 'yes')
-
-    # 启动开发服务器（在生产环境下推荐使用 gunicorn）
-    app.run(debug=debug, host='0.0.0.0', port=port)
+    
+    # 启动开发服务器
+    app.run(debug=True, host='0.0.0.0', port=5000)
